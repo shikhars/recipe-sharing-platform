@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { RecipeCard } from "@/components/recipe-card";
+import { Toaster } from "@/components/ui/toaster";
 
 const profileSchema = z.object({
   username: z.string().min(2, "Username is required"),
@@ -170,6 +172,7 @@ export default function DashboardPage() {
   const [hasError, setHasError] = useState<string | null>(null);
   const [dashboardView, setDashboardView] = useState<DashboardView>('dashboard');
   const [profile, setProfile] = useState<ProfileFormData | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const checkSessionAndFetch = async () => {
@@ -192,17 +195,30 @@ export default function DashboardPage() {
         }
       }
       setProfile(displayProfile);
-      // Fetch recipes (no join)
+      // Fetch recipes (left join)
       const { data: recipesData, error: recipesError } = await supabase
         .from('recipes')
-        .select('id, title, user_id, created_at')
+        .select(`
+          id, title, user_id, created_at, ingredients, category, difficulty,
+          likes:likes(count),
+          user_likes:likes(user_id)
+        `)
         .order('created_at', { ascending: false });
       if (recipesError) {
         setHasError(recipesError.message);
         setIsLoading(false);
         return;
       }
-      setRecipes(recipesData || []);
+      // Transform recipes to include like count and user_has_liked
+      const userId = user?.id;
+      const recipesWithLikes = (recipesData || []).map((recipe: any) => ({
+        ...recipe,
+        likes_count: recipe.likes?.[0]?.count || 0,
+        user_has_liked: Array.isArray(recipe.user_likes)
+          ? recipe.user_likes.some((like: any) => like.user_id === userId)
+          : false,
+      }));
+      setRecipes(recipesWithLikes);
       // Fetch all relevant profiles
       const userIds = [...new Set((recipesData || []).map((r: any) => r.user_id))];
       if (userIds.length > 0) {
@@ -227,6 +243,27 @@ export default function DashboardPage() {
     checkSessionAndFetch();
   }, [router, dashboardView]);
 
+  // Filter recipes by search query
+  const filteredRecipes = recipes.filter((recipe) => {
+    const query = searchQuery.toLowerCase();
+    const title = recipe.title?.toLowerCase() || "";
+    const category = recipe.category?.toLowerCase() || "";
+    const difficulty = recipe.difficulty?.toLowerCase() || "";
+    // Ingredients may be array or string
+    let ingredients = "";
+    if (Array.isArray(recipe.ingredients)) {
+      ingredients = recipe.ingredients.join(" ").toLowerCase();
+    } else if (typeof recipe.ingredients === "string") {
+      ingredients = recipe.ingredients.toLowerCase();
+    }
+    return (
+      title.includes(query) ||
+      category.includes(query) ||
+      difficulty.includes(query) ||
+      ingredients.includes(query)
+    );
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-500 dark:text-slate-400">
@@ -244,21 +281,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 dark:bg-slate-900 px-4 py-8">
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-8">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-1">Recipe Dashboard</h1>
+            <h1 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">Recipe Dashboard</h1>
             {profile && (
-              <div className="text-lg text-slate-700 dark:text-slate-200 mb-2">
-                Welcome, <span className="font-semibold">{profile.full_name}</span>!
+              <div className="text-lg text-slate-600 dark:text-slate-300 mb-2">
+                Welcome, <span className="font-semibold text-emerald-600 dark:text-emerald-400">{profile.full_name}</span>!
               </div>
             )}
           </div>
           <div className="flex items-center gap-4">
             <Button
               variant="primary"
-              className="px-4 py-2 rounded-lg"
+              className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow transition"
               onClick={() => setDashboardView('edit-profile')}
             >
               Edit Profile
@@ -272,6 +309,19 @@ export default function DashboardPage() {
             <SignOutButton />
           </div>
         </div>
+        {/* Search Bar */}
+        {dashboardView === 'dashboard' && (
+          <div className="mb-6">
+            <input
+              type="search"
+              className="w-full rounded border border-slate-300 dark:border-slate-600 px-4 py-2 text-base bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition"
+              placeholder="Search recipes by title, ingredient, or category..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              aria-label="Search recipes"
+            />
+          </div>
+        )}
         {dashboardView === 'edit-profile' && profile && (
           <ProfileForm
             initialProfile={profile}
@@ -280,38 +330,23 @@ export default function DashboardPage() {
         )}
         {dashboardView === 'dashboard' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {recipes && recipes.length > 0 ? (
-              recipes.map((recipe) => (
-                <div
+            {filteredRecipes && filteredRecipes.length > 0 ? (
+              filteredRecipes.map((recipe) => (
+                <RecipeCard
                   key={recipe.id}
-                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow p-5 flex flex-col gap-2"
-                >
-                  <div className="h-32 w-full bg-slate-200 dark:bg-slate-700 rounded mb-3 flex items-center justify-center text-slate-400 text-2xl">
-                    🍲
-                  </div>
-                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-1 truncate">{recipe.title}</h2>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                    Uploaded: {new Date(recipe.created_at).toLocaleDateString()}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                    By: {profiles[recipe.user_id] || 'Unknown'}
-                  </div>
-                  <Link
-                    href={`/recipes/${recipe.id}`}
-                    className="text-emerald-700 dark:text-emerald-400 hover:underline text-sm mt-auto"
-                  >
-                    View Recipe
-                  </Link>
-                </div>
+                  recipe={recipe}
+                  authorName={profiles[recipe.user_id] || 'Unknown'}
+                />
               ))
             ) : (
-              <div className="col-span-full text-center text-slate-500 dark:text-slate-400">
+              <div className="col-span-full text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl p-8 shadow">
                 No recipes found.
               </div>
             )}
           </div>
         )}
       </div>
+      <Toaster />
     </main>
   );
 } 

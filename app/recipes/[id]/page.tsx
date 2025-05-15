@@ -4,16 +4,25 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase-client";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
+import { CommentSection } from "@/components/comment-section";
+import { CommentWithUser } from "@/types/social";
+import { Toaster } from "@/components/ui/toaster";
 
 export default function RecipeDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const recipeId = params?.id as string;
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
   const [recipe, setRecipe] = useState<any>(null);
   const [authorName, setAuthorName] = useState<string>("Unknown");
   const [userId, setUserId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [comments, setComments] = useState<CommentWithUser[]>([]);
 
   useEffect(() => {
     const fetchRecipeAndAuthor = async () => {
@@ -45,10 +54,51 @@ export default function RecipeDetailsPage() {
           setAuthorName(profileData.full_name);
         }
       }
+      // Fetch comments with user data
+      const { data: commentsData, error: commentsError } = await supabase
+        .from("comments")
+        .select(`
+          *,
+          profiles!user_id (
+            id,
+            full_name
+          )
+        `)
+        .eq("recipe_id", recipeId)
+        .order("created_at", { ascending: false });
+      if (commentsError) {
+        setHasError(commentsError.message);
+      } else {
+        // Transform the data to match CommentWithUser type
+        const transformedComments = (commentsData || []).map(comment => ({
+          ...comment,
+          user: {
+            id: comment.profiles.id,
+            full_name: comment.profiles.full_name
+          }
+        }));
+        setComments(transformedComments);
+      }
       setIsLoading(false);
     };
     if (recipeId) fetchRecipeAndAuthor();
   }, [recipeId]);
+
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure you want to delete this recipe? This action cannot be undone.")) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    const { error } = await supabase
+      .from("recipes")
+      .delete()
+      .eq("id", recipeId);
+    setIsDeleting(false);
+    if (error) {
+      setDeleteError(error.message);
+      return;
+    }
+    router.push("/dashboard");
+  };
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-500 dark:text-slate-400">Loading recipe...</div>;
@@ -74,11 +124,11 @@ export default function RecipeDetailsPage() {
         <div className="text-xs text-slate-500 dark:text-slate-400 mb-4">Uploaded: {new Date(recipe.created_at).toLocaleDateString()}</div>
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ingredients</h2>
-          <div className="text-base text-slate-800 dark:text-slate-200 whitespace-pre-line">{recipe.ingredients || 'No ingredients listed.'}</div>
+          <div className="text-base text-slate-800 dark:text-slate-200 whitespace-pre-line">{Array.isArray(recipe.ingredients) ? recipe.ingredients.join("\n") : recipe.ingredients || 'No ingredients listed.'}</div>
         </div>
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Instructions</h2>
-          <div className="text-base text-slate-800 dark:text-slate-200 whitespace-pre-line">{recipe.instructions || 'No instructions provided.'}</div>
+          <div className="text-base text-slate-800 dark:text-slate-200 whitespace-pre-line">{Array.isArray(recipe.instructions) ? recipe.instructions.join("\n") : recipe.instructions || 'No instructions provided.'}</div>
         </div>
         <div className="mb-4 flex flex-wrap gap-4">
           <span className="inline-block bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1 rounded-full text-xs font-medium">Category: {recipe.category || 'N/A'}</span>
@@ -86,14 +136,58 @@ export default function RecipeDetailsPage() {
           <span className="inline-block bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1 rounded-full text-xs font-medium">Cooking Time: {recipe.cooking_time ? `${recipe.cooking_time} min` : 'N/A'}</span>
         </div>
         {isOwner && (
-          <Link
-            href={`/recipes/${recipe.id}/edit`}
-            className="inline-block mt-4 px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition"
-          >
-            Edit Recipe
-          </Link>
+          <div className="flex gap-2 mt-4">
+            <Link
+              href={`/recipes/${recipe.id}/edit`}
+              className="inline-block px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition"
+            >
+              Edit Recipe
+            </Link>
+            <Button
+              type="button"
+              className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold shadow hover:bg-red-700 transition"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
         )}
+        {deleteError && <p className="text-red-600 text-sm mt-2 text-center">{deleteError}</p>}
       </div>
+      <div className="mt-8">
+        <CommentSection
+          recipeId={recipe.id}
+          comments={comments}
+          onCommentChange={() => {
+            // Refetch comments when they change
+            supabase
+              .from("comments")
+              .select(`
+                *,
+                profiles!user_id (
+                  id,
+                  full_name
+                )
+              `)
+              .eq("recipe_id", recipeId)
+              .order("created_at", { ascending: false })
+              .then(({ data }) => {
+                if (data) {
+                  const transformedComments = data.map(comment => ({
+                    ...comment,
+                    user: {
+                      id: comment.profiles.id,
+                      full_name: comment.profiles.full_name
+                    }
+                  }));
+                  setComments(transformedComments);
+                }
+              });
+          }}
+        />
+      </div>
+      <Toaster />
     </main>
   );
 } 
