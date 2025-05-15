@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/lib/supabase-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const recipeSchema = z.object({
   title: z.string().min(2, "Title is required"),
@@ -23,11 +24,12 @@ export default function EditRecipePage() {
   const router = useRouter();
   const params = useParams();
   const recipeId = params?.id as string;
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [recipe, setRecipe] = useState<Recipe | null>(null);
 
   const {
     register,
@@ -40,9 +42,6 @@ export default function EditRecipePage() {
     const fetchRecipe = async () => {
       setIsLoading(true);
       setHasError(null);
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
       // Fetch recipe
       const { data: recipeData, error: recipeError } = await supabase
         .from("recipes")
@@ -73,6 +72,7 @@ export default function EditRecipePage() {
         difficulty: recipeData.difficulty || "",
         category: recipeData.category || "",
       });
+      setRecipe(recipeData);
       setIsLoading(false);
     };
     if (recipeId) fetchRecipe();

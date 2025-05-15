@@ -20,6 +20,20 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 type DashboardView = 'dashboard' | 'edit-profile';
 
+type Recipe = {
+  id: string;
+  title: string;
+  user_id: string;
+  created_at: string;
+  ingredients: string[] | string;
+  category: string;
+  difficulty: string;
+  likes_count: number;
+  user_has_liked: boolean;
+  likes?: { count: number }[];
+  user_likes?: { user_id: string }[];
+};
+
 async function generateUniqueUsername(base: string): Promise<string> {
   let username = base;
   let suffix = 1;
@@ -34,15 +48,6 @@ async function generateUniqueUsername(base: string): Promise<string> {
     suffix++;
   }
   return username;
-}
-
-async function getDefaultProfile(user: { email?: string }): Promise<{ username: string; full_name: string }> {
-  const emailPrefix = user.email?.split("@")[0] || "user";
-  const username = await generateUniqueUsername(emailPrefix);
-  return {
-    username,
-    full_name: emailPrefix,
-  };
 }
 
 function ProfileForm({ onSave, initialProfile }: { onSave: () => void; initialProfile: ProfileFormData }) {
@@ -167,7 +172,7 @@ function SignOutButton() {
 export default function DashboardPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [recipes, setRecipes] = useState<any[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({}); // user_id -> full_name
   const [hasError, setHasError] = useState<string | null>(null);
   const [dashboardView, setDashboardView] = useState<DashboardView>('dashboard');
@@ -211,11 +216,11 @@ export default function DashboardPage() {
       }
       // Transform recipes to include like count and user_has_liked
       const userId = user?.id;
-      const recipesWithLikes = (recipesData || []).map((recipe: any) => ({
+      const recipesWithLikes = (recipesData || []).map((recipe: Recipe) => ({
         ...recipe,
         likes_count: recipe.likes?.[0]?.count || 0,
         user_has_liked: Array.isArray(recipe.user_likes)
-          ? recipe.user_likes.some((like: any) => like.user_id === userId)
+          ? recipe.user_likes.some((like) => like.user_id === userId)
           : false,
       }));
       setRecipes(recipesWithLikes);

@@ -1,61 +1,93 @@
 import { supabase } from './supabase-client';
-import { Like, Comment, NewLike, NewComment, CommentWithUser, RecipeWithSocial } from '@/types/social';
+
+type Like = {
+  id: string;
+  user_id: string;
+  recipe_id: string;
+  created_at: string;
+};
+
+type Comment = {
+  id: string;
+  user_id: string;
+  recipe_id: string;
+  content: string;
+  created_at: string;
+};
+
+type NewComment = {
+  user_id: string;
+  recipe_id: string;
+  content: string;
+};
+
+type CommentWithUser = Comment & {
+  user: {
+    full_name: string;
+  };
+};
+
+type RecipeWithSocial = {
+  id: string;
+  title: string;
+  user_id: string;
+  created_at: string;
+  ingredients: string[] | string;
+  category: string;
+  difficulty: string;
+  likes_count: number;
+  user_has_liked: boolean;
+  comments: CommentWithUser[];
+};
 
 export async function toggleLike(recipeId: string, userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Check if like exists
-    const { data: existingLike } = await supabase
+    const { data: existingLike, error: fetchError } = await supabase
       .from('likes')
       .select('id')
       .eq('recipe_id', recipeId)
       .eq('user_id', userId)
       .single();
 
-    if (existingLike) {
-      // Unlike
-      const { error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('recipe_id', recipeId)
-        .eq('user_id', userId);
-
-      if (error) throw error;
-    } else {
-      // Like
-      const newLike: NewLike = {
-        recipe_id: recipeId,
-        user_id: userId,
-      };
-
-      const { error } = await supabase
-        .from('likes')
-        .insert(newLike);
-
-      if (error) throw error;
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw fetchError;
     }
 
-    return { success: true };
+    if (existingLike) {
+      const { error: deleteError } = await supabase
+        .from('likes')
+        .delete()
+        .eq('id', existingLike.id);
+
+      if (deleteError) throw deleteError;
+      return { success: true };
+    } else {
+      const { error: insertError } = await supabase
+        .from('likes')
+        .insert({ recipe_id: recipeId, user_id: userId });
+
+      if (insertError) throw insertError;
+      return { success: true };
+    }
   } catch (error) {
-    return { success: false, error: (error as Error).message };
+    console.error('Error toggling like:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
-export async function addComment(
-  recipeId: string,
-  userId: string,
-  content: string
-): Promise<{ success: boolean; error?: string }> {
+export async function addComment(comment: NewComment): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase.from("comments").insert({
-      recipe_id: recipeId,
-      user_id: userId,
-      content,
+      recipe_id: comment.recipe_id,
+      user_id: comment.user_id,
+      content: comment.content,
     });
 
     if (error) throw error;
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -107,21 +139,18 @@ export async function getRecipeWithSocial(recipeId: string, userId: string): Pro
   }
 }
 
-export async function deleteComment(
-  commentId: string,
-  userId: string
-): Promise<{ success: boolean; error?: string }> {
+export async function deleteComment(commentId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
       .from("comments")
       .delete()
-      .eq("id", commentId)
-      .eq("user_id", userId);
+      .eq("id", commentId);
 
     if (error) throw error;
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 

@@ -10,14 +10,29 @@ import { CommentSection } from "@/components/comment-section";
 import { CommentWithUser } from "@/types/social";
 import { Toaster } from "@/components/ui/toaster";
 
-export default function RecipeDetailsPage() {
+type Recipe = {
+  id: string;
+  title: string;
+  user_id: string;
+  created_at: string;
+  ingredients: string[] | string;
+  category: string;
+  difficulty: string;
+  likes_count: number;
+  user_has_liked: boolean;
+};
+
+export default async function RecipePage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const params = useParams();
-  const recipeId = params?.id as string;
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data: recipe } = await supabase
+    .from('recipes')
+    .select('*')
+    .eq('id', params.id)
+    .single() as { data: Recipe | null };
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
-  const [recipe, setRecipe] = useState<any>(null);
   const [authorName, setAuthorName] = useState<string>("Unknown");
   const [userId, setUserId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -35,7 +50,7 @@ export default function RecipeDetailsPage() {
       const { data: recipeData, error: recipeError } = await supabase
         .from("recipes")
         .select("*")
-        .eq("id", recipeId)
+        .eq("id", params.id)
         .single();
       if (recipeError) {
         setHasError(recipeError.message);
@@ -64,7 +79,7 @@ export default function RecipeDetailsPage() {
             full_name
           )
         `)
-        .eq("recipe_id", recipeId)
+        .eq("recipe_id", params.id)
         .order("created_at", { ascending: false });
       if (commentsError) {
         setHasError(commentsError.message);
@@ -81,8 +96,8 @@ export default function RecipeDetailsPage() {
       }
       setIsLoading(false);
     };
-    if (recipeId) fetchRecipeAndAuthor();
-  }, [recipeId]);
+    if (params.id) fetchRecipeAndAuthor();
+  }, [params.id]);
 
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this recipe? This action cannot be undone.")) return;
@@ -91,7 +106,7 @@ export default function RecipeDetailsPage() {
     const { error } = await supabase
       .from("recipes")
       .delete()
-      .eq("id", recipeId);
+      .eq("id", params.id);
     setIsDeleting(false);
     if (error) {
       setDeleteError(error.message);
@@ -170,7 +185,7 @@ export default function RecipeDetailsPage() {
                   full_name
                 )
               `)
-              .eq("recipe_id", recipeId)
+              .eq("recipe_id", params.id)
               .order("created_at", { ascending: false })
               .then(({ data }) => {
                 if (data) {
