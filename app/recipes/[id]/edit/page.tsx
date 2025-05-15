@@ -20,6 +20,18 @@ const recipeSchema = z.object({
 
 type RecipeFormData = z.infer<typeof recipeSchema>;
 
+type Recipe = {
+  id: string;
+  title: string;
+  user_id: string;
+  created_at: string;
+  ingredients: string[] | string;
+  instructions: string[] | string;
+  cooking_time: number;
+  category: string;
+  difficulty: string;
+};
+
 export default function EditRecipePage() {
   const router = useRouter();
   const params = useParams();

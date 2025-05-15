@@ -5,7 +5,6 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
 import { CommentSection } from "@/components/comment-section";
 import { CommentWithUser } from "@/types/social";
 import { Toaster } from "@/components/ui/toaster";
@@ -16,23 +15,19 @@ type Recipe = {
   user_id: string;
   created_at: string;
   ingredients: string[] | string;
+  instructions: string[] | string;
+  cooking_time: number;
   category: string;
   difficulty: string;
   likes_count: number;
   user_has_liked: boolean;
 };
 
-export default async function RecipePage({ params }: { params: { id: string } }) {
+export default function RecipePage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { data: { session } } = await supabase.auth.getSession();
-  const { data: recipe } = await supabase
-    .from('recipes')
-    .select('*')
-    .eq('id', params.id)
-    .single() as { data: Recipe | null };
-  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
+  const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [authorName, setAuthorName] = useState<string>("Unknown");
   const [userId, setUserId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -46,7 +41,7 @@ export default async function RecipePage({ params }: { params: { id: string } })
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       setUserId(user?.id || null);
-      // Fetch recipe (no join)
+      // Fetch recipe
       const { data: recipeData, error: recipeError } = await supabase
         .from("recipes")
         .select("*")
@@ -57,7 +52,7 @@ export default async function RecipePage({ params }: { params: { id: string } })
         setIsLoading(false);
         return;
       }
-      setRecipe(recipeData);
+      setRecipe(recipeData as Recipe);
       // Fetch author profile
       if (recipeData?.user_id) {
         const { data: profileData, error: profileError } = await supabase

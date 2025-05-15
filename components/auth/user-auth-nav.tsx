@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-client";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export function UserAuthNav() {
   const [isLoading, setIsLoading] = useState(true);
