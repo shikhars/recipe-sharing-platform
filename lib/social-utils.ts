@@ -1,12 +1,5 @@
 import { supabase } from './supabase-client';
 
-type Like = {
-  id: string;
-  user_id: string;
-  recipe_id: string;
-  created_at: string;
-};
-
 type Comment = {
   id: string;
   user_id: string;
@@ -168,7 +161,8 @@ export async function updateComment(
 
     if (error) throw error;
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 } 

@@ -34,22 +34,6 @@ type Recipe = {
   user_likes?: { user_id: string }[];
 };
 
-async function generateUniqueUsername(base: string): Promise<string> {
-  let username = base;
-  let suffix = 1;
-  while (true) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", username)
-      .maybeSingle();
-    if (!data) break;
-    username = `${base}${suffix}`;
-    suffix++;
-  }
-  return username;
-}
-
 function ProfileForm({ onSave, initialProfile }: { onSave: () => void; initialProfile: ProfileFormData }) {
   const [isSaving, setIsSaving] = useState(false);
   const [hasError, setHasError] = useState<string | null>(null);

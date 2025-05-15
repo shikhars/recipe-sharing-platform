@@ -41,7 +41,6 @@ export default function EditRecipePage() {
   const [hasError, setHasError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
 
   const {
     register,
@@ -84,11 +83,10 @@ export default function EditRecipePage() {
         difficulty: recipeData.difficulty || "",
         category: recipeData.category || "",
       });
-      setRecipe(recipeData);
       setIsLoading(false);
     };
     if (recipeId) fetchRecipe();
-  }, [recipeId, reset]);
+  }, [recipeId, reset, user]);
 
   const onSubmit = async (values: RecipeFormData) => {
     setIsSaving(true);
